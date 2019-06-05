@@ -6,14 +6,18 @@ import com.techyourchance.testdoublesfundamentals.exercise4.users.User;
 import com.techyourchance.testdoublesfundamentals.exercise4.users.UsersCache;
 
 import org.jetbrains.annotations.Nullable;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
 
+import static com.techyourchance.testdoublesfundamentals.exercise4.FetchUserProfileUseCaseSync.UseCaseResult;
+import static com.techyourchance.testdoublesfundamentals.exercise4.FetchUserProfileUseCaseSync.UseCaseResult.FAILURE;
+import static com.techyourchance.testdoublesfundamentals.exercise4.FetchUserProfileUseCaseSync.UseCaseResult.NETWORK_ERROR;
+import static com.techyourchance.testdoublesfundamentals.exercise4.FetchUserProfileUseCaseSync.UseCaseResult.SUCCESS;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
 
 public class FetchUserProfileUseCaseSyncTest {
 
@@ -33,24 +37,87 @@ public class FetchUserProfileUseCaseSyncTest {
         SUT = new FetchUserProfileUseCaseSync(mUserProfileHttpEndpointSync, mUsersCache);
     }
 
-    // Get user profile success
+    @Test
+    public void userSync_success_userIdPassedToEndpoint() {
+        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
+        SUT.fetchUserProfileSync(USER_ID);
+        assertThat(mUserProfileHttpEndpointSync.mUserId, is(USER_ID));
+    }
 
     @Test
-    public void userSync_successUserProfileRetrievedAndCached_userProfileReturned() {
-        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
-
+    public void userSync_success_userCached() {
         SUT.fetchUserProfileSync(USER_ID);
+        assertThat(mUsersCache.getUser(USER_ID).getUserId(), is(USER_ID));
+    }
 
-        Assert.assertThat(mUserProfileHttpEndpointSync.mUserId, is(USER_ID));
-        Assert.assertThat(mUsersCache.getUser(USER_ID), notNullValue());
+    @Test
+    public void userSync_authError_userNotCached() {
+        mUserProfileHttpEndpointSync.isAuthError = true;
+        SUT.fetchUserProfileSync(USER_ID);
+        assertThat(mUsersCache.getUser(USER_ID), is(nullValue()));
     }
 
 
-    // Get user profile failure
+    @Test
+    public void userSync_generalError_userNotCached() {
+        mUserProfileHttpEndpointSync.isGeneralError = true;
+        SUT.fetchUserProfileSync(USER_ID);
+        assertThat(mUsersCache.getUser(USER_ID), is(nullValue()));
+    }
 
-    // If get user success, user is cached user
+    @Test
+    public void userSync_serverError_userNotCached() {
+        mUserProfileHttpEndpointSync.isServerError = true;
+        SUT.fetchUserProfileSync(USER_ID);
+        assertThat(mUsersCache.getUser(USER_ID), is(nullValue()));
+    }
 
-    //
+    @Test
+    public void userSync_networkError_userNotCached() {
+        mUserProfileHttpEndpointSync.isNetworkException = true;
+        SUT.fetchUserProfileSync(USER_ID);
+        assertThat(mUsersCache.getUser(USER_ID), is(nullValue()));
+    }
+
+    @Test
+    public void userSync_success_successReturned() {
+        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
+        UseCaseResult useCaseResult = SUT.fetchUserProfileSync(USER_ID);
+        assertThat(useCaseResult, is(SUCCESS));
+    }
+
+    @Test
+    public void userSync_authError_failureReturned() {
+        mUserProfileHttpEndpointSync.isAuthError = true;
+        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
+        UseCaseResult useCaseResult = SUT.fetchUserProfileSync(USER_ID);
+        assertThat(useCaseResult, is(FAILURE));
+    }
+
+    @Test
+    public void userSync_generalError_failureReturned() {
+        mUserProfileHttpEndpointSync.isGeneralError = true;
+        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
+        UseCaseResult useCaseResult = SUT.fetchUserProfileSync(USER_ID);
+        assertThat(useCaseResult, is(FAILURE));
+    }
+
+    @Test
+    public void userSync_serverError_failureReturned() {
+        mUserProfileHttpEndpointSync.isServerError = true;
+        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
+        UseCaseResult useCaseResult = SUT.fetchUserProfileSync(USER_ID);
+        assertThat(useCaseResult, is(FAILURE));
+    }
+
+    @Test
+    public void userSync_networkException_networkErrorReturned() {
+        mUserProfileHttpEndpointSync.isNetworkException = true;
+        mUsersCache.cacheUser(new User(USER_ID, FULL_NAME, IMAGE_URL));
+        UseCaseResult useCaseResult = SUT.fetchUserProfileSync(USER_ID);
+        assertThat(useCaseResult, is(NETWORK_ERROR));
+    }
+
 
     // Helper Classes
     private static class UserProfileHttpEndpointSyncTd implements UserProfileHttpEndpointSync {
@@ -84,7 +151,7 @@ public class FetchUserProfileUseCaseSyncTest {
 
         @Override
         public void cacheUser(User user) {
-            if (getUser(user.getUserId()) != null) {
+            if (getUser(user.getUserId()) == null) {
                 mCacheUsers.add(user);
             }
         }
