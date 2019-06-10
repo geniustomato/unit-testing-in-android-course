@@ -1,6 +1,8 @@
 package com.techyourchance.testdrivendevelopment.exercise7.networking;
 
 
+import com.techyourchance.testdrivendevelopment.example9.networking.NetworkErrorException;
+
 public interface GetReputationHttpEndpointSync {
 
     enum EndpointStatus {
@@ -27,6 +29,6 @@ public interface GetReputationHttpEndpointSync {
         }
     }
 
-    EndpointResult getReputationSync();
+    EndpointResult getReputationSync() throws NetworkErrorException;
 
 }
