@@ -1,5 +1,7 @@
 package com.techyourchance.testdrivendevelopment.exercise8.networking;
 
+import com.techyourchance.testdrivendevelopment.exercise8.contacts.Contact;
+
 import java.util.List;
 
 public interface GetContactsHttpEndpoint {
@@ -10,7 +12,7 @@ public interface GetContactsHttpEndpoint {
     }
 
     interface Callback {
-        void onGetContactsSucceeded(List<ContactSchema> cartItems);
+        void onGetContactsSucceeded(List<Contact> contactItems);
         void onGetContactsFailed(FailReason failReason);
     }
 

@@ -1,5 +1,5 @@
-Description:
 Your goal is to implement FetchContactsUseCase class using Uncle Bob's TDD technique. This class
+Description:
 must be Observable and notify it's observers (listeners) about completion of an async flow
 through method calls.
 
