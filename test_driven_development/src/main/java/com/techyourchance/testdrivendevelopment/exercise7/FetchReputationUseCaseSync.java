@@ -20,7 +20,7 @@ public class FetchReputationUseCaseSync {
         try {
             result = mGetReputationHttpEndpointSync.getReputationSync();
         } catch (NetworkErrorException e) {
-            return UseCaseResult.FAILURE;
+            return UseCaseResult.NETWORK_FAILURE;
         }
 
         switch (result.getStatus()) {
@@ -34,6 +34,6 @@ public class FetchReputationUseCaseSync {
     }
 
     public enum UseCaseResult {
-        FAILURE, SUCCESS
+        FAILURE, SUCCESS, NETWORK_FAILURE
     }
 }
