@@ -31,9 +31,9 @@ public class Contact {
         if (this == o) return true;
         if (!(o instanceof Contact)) return false;
         Contact contact = (Contact) o;
-        return Objects.equals(mId, contact.mId) &&
-                Objects.equals(mFullName, contact.mFullName) &&
-                Objects.equals(mImageUrl, contact.mImageUrl);
+        return mId.equals(contact.mId) &&
+                mFullName.equals(contact.mFullName) &&
+                mImageUrl.equals(contact.mImageUrl);
     }
 
     @Override

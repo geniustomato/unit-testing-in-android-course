@@ -1,9 +1,12 @@
 package com.techyourchance.testdrivendevelopment.exercise8;
 
+import com.techyourchance.testdrivendevelopment.exercise8.FetchContactsUseCase.Listener;
 import com.techyourchance.testdrivendevelopment.exercise8.contacts.Contact;
+import com.techyourchance.testdrivendevelopment.exercise8.networking.ContactSchema;
 import com.techyourchance.testdrivendevelopment.exercise8.networking.GetContactsHttpEndpoint;
+import com.techyourchance.testdrivendevelopment.exercise8.networking.GetContactsHttpEndpoint.Callback;
+import com.techyourchance.testdrivendevelopment.exercise8.networking.GetContactsHttpEndpoint.FailReason;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -17,102 +20,112 @@ import org.mockito.stubbing.Answer;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.techyourchance.testdrivendevelopment.exercise8.networking.GetContactsHttpEndpoint.Callback;
-import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FetchContactsUseCaseTest {
 
-    public static final String FILTER_TERM = "filterTerm";
-    public static final String ID = "id";
+    public static final String FILTER_NAME = "name";
+    public static final String ID = "ID";
     public static final String FULL_NAME = "fullName";
+    public static final String PHONE_NUMBER = "phoneNumber";
     public static final String IMAGE_URL = "imageUrl";
+    public static final int AGE = 26;
 
     private FetchContactsUseCase SUT;
 
+    @Mock
+    private GetContactsHttpEndpoint mGetContactsHttpEndpointMock;
+
+    @Mock
+    private Listener mListener1;
+
+    @Mock
+    private Listener mListener2;
+
     @Captor
-    private ArgumentCaptor<String> mAcFilterTerm;
+    private ArgumentCaptor<String> mStringAc;
+
     @Captor
-    private ArgumentCaptor<List<Contact>> mAcContactList;
+    private ArgumentCaptor<List<Contact>> mContactAc;
 
-    @Mock
-    private GetContactsHttpEndpoint mGetContactsHttpEndpoint;
-
-    @Mock
-    private FetchContactsUseCase.Listener mMockListener1;
-
-    @Mock
-    private FetchContactsUseCase.Listener mMockListener2;
+    public FetchContactsUseCaseTest() {
+    }
 
     @Before
     public void setUp() throws Exception {
-        SUT = new FetchContactsUseCase(mGetContactsHttpEndpoint);
+        SUT = new FetchContactsUseCase(mGetContactsHttpEndpointMock);
         success();
     }
 
-    private List<Contact> getContactItems() {
-        ArrayList<Contact> contactItems = new ArrayList<>();
-        contactItems.add(new Contact(ID, FULL_NAME, IMAGE_URL));
-        return contactItems;
+    @Test
+    public void fetchContacts_success_correctFilterNamePassedToEndpoint() throws Exception {
+        SUT.fetchContacts(FILTER_NAME);
+
+        verify(mGetContactsHttpEndpointMock).getContacts(mStringAc.capture(), any(Callback.class));
+
+        assertEquals(FILTER_NAME, mStringAc.getValue());
     }
 
-
+    // success registered listeners informed of success and correct data from callback
     @Test
-    public void fetchContacts_passingArguments_correctArgumentsPassed() throws Exception {
-        SUT.fetchContacts(FILTER_TERM);
+    public void fetchContacts_success_successCallbackWithDataCalled() throws Exception {
+        SUT.registerListener(mListener1);
+        SUT.registerListener(mListener2);
 
-        verify(mGetContactsHttpEndpoint).getContacts(mAcFilterTerm.capture(), any(Callback.class));
+        SUT.fetchContacts(FILTER_NAME);
 
-        Assert.assertThat(mAcFilterTerm.getValue(), is(FILTER_TERM));
+
+        verify(mListener1).onSuccess(mContactAc.capture());
+        verify(mListener2).onSuccess(mContactAc.capture());
+
+        List<List<Contact>> capturedContacts = mContactAc.getAllValues();
+
+        assertEquals(getContactItemList(), capturedContacts.get(0));
+        assertEquals(getContactItemList(), capturedContacts.get(1));
     }
 
+    // unregistered listeners should not be triggered on success
     @Test
-    public void fetchContacts_success_observerNotifiedWithCorrectData() throws Exception {
-        SUT.registerListener(mMockListener1);
-        SUT.registerListener(mMockListener2);
+    public void fetchContacts_success_unregisteredListenersNotCalled() throws Exception {
+        SUT.registerListener(mListener1);
+        SUT.registerListener(mListener2);
+        SUT.unregisterListener(mListener1);
 
-        SUT.fetchContacts(FILTER_TERM);
-
-        verify(mMockListener1).onSuccess(mAcContactList.capture());
-        verify(mMockListener2).onSuccess(mAcContactList.capture());
+        SUT.fetchContacts(FILTER_NAME);
 
 
-        List<List<Contact>> receivedContactLists = mAcContactList.getAllValues();
+        verifyZeroInteractions(mListener1);
+        verify(mListener2).onSuccess(mContactAc.capture());
 
-        Assert.assertThat(receivedContactLists.get(0), is(getContactItems()));
-        Assert.assertThat(receivedContactLists.get(1), is(getContactItems()));
+        List<List<Contact>> capturedContacts = mContactAc.getAllValues();
+        assertEquals(getContactItemList(), capturedContacts.get(0));
     }
 
+    // general error registered listeners get failure callback
     @Test
-    public void fetchContacts_success_unregisteredObserversNotNotified() throws Exception {
-        SUT.registerListener(mMockListener1);
-        SUT.registerListener(mMockListener2);
-        SUT.unregisterListener(mMockListener2);
-
-        SUT.fetchContacts(FILTER_TERM);
-
-
-        verify(mMockListener1).onSuccess(mAcContactList.capture());
-        verifyNoMoreInteractions(mMockListener2);
-    }
-
-    // Failure -- registered listeners receive Failure status
-    @Test
-    public void fetchContacts_failure_observersNotifiedWithFailure() throws Exception {
+    public void fetchContacts_generalError_endpointReturnsGeneralError() throws Exception {
         generalError();
 
-        SUT.registerListener(mMockListener1);
-        SUT.registerListener(mMockListener2);
+        SUT.registerListener(mListener1);
+        SUT.fetchContacts(FILTER_NAME);
 
-        SUT.fetchContacts(FILTER_TERM);
+        verify(mListener1).onFailure(EndpointResult.GENERAL_ERROR);
+    }
 
+    @Test
+    public void fetchContacts_networkError_endpointReturnsNetworkError() throws Exception {
+        networkError();
 
-        verify(mMockListener1).onSuccess(mAcContactList.capture());
-        verifyNoMoreInteractions(mMockListener2);
+        SUT.registerListener(mListener1);
+        SUT.fetchContacts(FILTER_NAME);
+
+        verify(mListener1).onFailure(EndpointResult.NETWORK_ERROR);
     }
 
     private void success() {
@@ -121,11 +134,10 @@ public class FetchContactsUseCaseTest {
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Object[] args = invocation.getArguments();
                 Callback callback = (Callback) args[1];
-                callback.onGetContactsSucceeded(getContactItems());
-
+                callback.onGetContactsSucceeded(getContactSchema());
                 return null;
             }
-        }).when(mGetContactsHttpEndpoint).getContacts(any(String.class), any(Callback.class));
+        }).when(mGetContactsHttpEndpointMock).getContacts(anyString(), any(Callback.class));
     }
 
     private void generalError() {
@@ -134,15 +146,50 @@ public class FetchContactsUseCaseTest {
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Object[] args = invocation.getArguments();
                 Callback callback = (Callback) args[1];
-                callback.onGetContactsSucceeded(getContactItems());
-
+                callback.onGetContactsFailed(FailReason.GENERAL_ERROR);
                 return null;
             }
-        }).when(mGetContactsHttpEndpoint).getContacts(any(String.class), any(Callback.class));
+        }).when(mGetContactsHttpEndpointMock).getContacts(anyString(), any(Callback.class));
     }
 
-    // Failure -- unregistered listeners don't receive Failure status
-    // Network error -- registered listeners receive Network Error status
+
+    private void networkError() {
+        doAnswer(new Answer() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                Object[] args = invocation.getArguments();
+                Callback callback = (Callback) args[1];
+                callback.onGetContactsFailed(FailReason.NETWORK_ERROR);
+                return null;
+            }
+        }).when(mGetContactsHttpEndpointMock).getContacts(anyString(), any(Callback.class));
+    }
+
+    private List<ContactSchema> getContactSchema() {
+        List<ContactSchema> contactSchemaList = new ArrayList<>();
+        contactSchemaList.add(new ContactSchema(
+                ID,
+                FULL_NAME,
+                PHONE_NUMBER,
+                IMAGE_URL,
+                AGE
+        ));
+
+        return contactSchemaList;
+    }
+
+    private List<Contact> getContactItemList() {
+        List<Contact> contactList = new ArrayList<>();
+
+        contactList.add(
+                new Contact(
+                        ID,
+                        FULL_NAME,
+                        IMAGE_URL
+                )
+        );
+        return contactList;
+    }
 
 
 }
