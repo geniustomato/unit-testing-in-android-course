@@ -7,13 +7,19 @@ import com.techyourchance.unittesting.networking.questions.QuestionSchema;
 
 public class FetchQuestionDetailsUseCase extends BaseObservable<FetchQuestionDetailsUseCase.Listener> {
 
+
+    public static final long TIMEOUT = 60000L;
+
     public interface Listener {
         void onQuestionDetailsFetched(QuestionDetails questionDetails);
+
         void onQuestionDetailsFetchFailed();
     }
 
     private final FetchQuestionDetailsEndpoint mFetchQuestionDetailsEndpoint;
     private final TimeProvider mTimeProvider;
+    private QuestionSchema mQuestionSchemaCache;
+    private long mLastFetchTimestamp = 0L;
 
     public FetchQuestionDetailsUseCase(FetchQuestionDetailsEndpoint fetchQuestionDetailsEndpoint,
                                        TimeProvider timeProvider) {
@@ -22,11 +28,20 @@ public class FetchQuestionDetailsUseCase extends BaseObservable<FetchQuestionDet
     }
 
     public void fetchQuestionDetailsAndNotify(String questionId) {
+        if (mQuestionSchemaCache == null || mTimeProvider.getCurrentTimestamp() >= mLastFetchTimestamp + TIMEOUT) {
+            fetch(questionId);
+        } else {
+            notifySuccess(mQuestionSchemaCache);
+        }
+    }
+
+    private void fetch(String questionId) {
         mFetchQuestionDetailsEndpoint.fetchQuestionDetails(questionId, new FetchQuestionDetailsEndpoint.Listener() {
             @Override
             public void onQuestionDetailsFetched(QuestionSchema question) {
+                mQuestionSchemaCache = question;
+                mLastFetchTimestamp = mTimeProvider.getCurrentTimestamp();
                 notifySuccess(question);
-
             }
 
             @Override

@@ -109,7 +109,7 @@ public class QuestionDetailsControllerTest {
         private int counter = 0;
 
         public UseCaseTd() {
-            super(null);
+            super(null, null);
         }
 
 

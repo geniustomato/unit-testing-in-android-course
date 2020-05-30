@@ -1,5 +1,6 @@
 package com.techyourchance.unittesting.questions;
 
+import com.techyourchance.unittesting.common.time.TimeProvider;
 import com.techyourchance.unittesting.networking.questions.FetchQuestionDetailsEndpoint;
 import com.techyourchance.unittesting.networking.questions.QuestionSchema;
 import com.techyourchance.unittesting.questions.FetchQuestionDetailsUseCase.Listener;
@@ -17,7 +18,9 @@ import java.util.List;
 import static junit.framework.Assert.assertEquals;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FetchQuestionDetailsUseCaseTest {
@@ -26,6 +29,10 @@ public class FetchQuestionDetailsUseCaseTest {
     public static final String BODY = "body";
     public static final String TITLE = "title";
     public static final String ID = "Id";
+
+    public static final String UPDATED_TITLE = TITLE + "Updated";
+    public static final String UPDATED_ID = ID + "Updated";
+    public static final String UPDATED_BODY = BODY + "Updated";
 
     private FetchQuestionDetailsUseCase SUT;
 
@@ -37,6 +44,9 @@ public class FetchQuestionDetailsUseCaseTest {
     @Mock
     private Listener mListener2;
 
+    @Mock
+    private TimeProvider mTimeProviderMock;
+
     @Captor
     private ArgumentCaptor<QuestionDetails> mQuestionDetailsAc;
 
@@ -44,7 +54,7 @@ public class FetchQuestionDetailsUseCaseTest {
     @Before
     public void setUp() throws Exception {
         mFetchQuestionDetailsEndpointTd = new EndpointTd();
-        SUT = new FetchQuestionDetailsUseCase(mFetchQuestionDetailsEndpointTd);
+        SUT = new FetchQuestionDetailsUseCase(mFetchQuestionDetailsEndpointTd, mTimeProviderMock);
     }
 
     @Test
@@ -65,8 +75,8 @@ public class FetchQuestionDetailsUseCaseTest {
         verify(mListener2).onQuestionDetailsFetched(mQuestionDetailsAc.capture());
         List<QuestionDetails> capturedQuestionDetailsList = mQuestionDetailsAc.getAllValues();
 
-        assertEquals(getExpectedQuestionDetails(), capturedQuestionDetailsList.get(0));
-        assertEquals(getExpectedQuestionDetails(), capturedQuestionDetailsList.get(1));
+        assertEquals(getExpectedFirstQuestionDetails(), capturedQuestionDetailsList.get(0));
+        assertEquals(getExpectedFirstQuestionDetails(), capturedQuestionDetailsList.get(1));
     }
 
     @Test
@@ -82,17 +92,52 @@ public class FetchQuestionDetailsUseCaseTest {
         verify(mListener2).onQuestionDetailsFetchFailed();
     }
 
+    @Test
+    public void fetchQuestionDetails_ifTriggeredAgainBeforeTimeout_returnCacheData() throws Exception {
+        SUT.registerListener(mListener1);
+        SUT.registerListener(mListener2);
+
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+        when(mTimeProviderMock.getCurrentTimestamp()).thenReturn(59999L);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+
+        assertThat(mFetchQuestionDetailsEndpointTd.fetchCounter, is(1));
+        verify(mListener1, times(2)).onQuestionDetailsFetched(getExpectedFirstQuestionDetails());
+        verify(mListener2, times(2)).onQuestionDetailsFetched(getExpectedFirstQuestionDetails());
+    }
+
+    @Test
+    public void fetchQuestionDetails_ifTriggeredAgainAfterTimeout_returnUpdatedDataFromEndpoint() throws Exception {
+        SUT.registerListener(mListener1);
+        SUT.registerListener(mListener2);
+
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+        when(mTimeProviderMock.getCurrentTimestamp()).thenReturn(60000L);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID);
+
+        assertThat(mFetchQuestionDetailsEndpointTd.fetchCounter, is(2));
+        verify(mListener1).onQuestionDetailsFetched(getExpectedUpdatedQuestionDetails());
+        verify(mListener2).onQuestionDetailsFetched(getExpectedUpdatedQuestionDetails());
+    }
+
     private void failure() {
         mFetchQuestionDetailsEndpointTd.isGeneralError = true;
     }
 
-    private QuestionDetails getExpectedQuestionDetails() {
+    private QuestionDetails getExpectedFirstQuestionDetails() {
         return new QuestionDetails(ID, TITLE, BODY);
     }
 
+    private QuestionDetails getExpectedUpdatedQuestionDetails() {
+        return new QuestionDetails(UPDATED_ID, UPDATED_TITLE, UPDATED_BODY);
+    }
+
+
     private class EndpointTd extends FetchQuestionDetailsEndpoint {
         private String questionId;
+
         public boolean isGeneralError = false;
+        public int fetchCounter = 0;
 
         public EndpointTd() {
             super(null);
@@ -100,17 +145,26 @@ public class FetchQuestionDetailsUseCaseTest {
 
         @Override
         public void fetchQuestionDetails(String questionId, Listener listener) {
+            fetchCounter++;
             this.questionId = questionId;
 
             if(isGeneralError) {
                 listener.onQuestionDetailsFetchFailed();
             } else {
-                listener.onQuestionDetailsFetched(getQuestionSchema());
+                if(fetchCounter == 1) {
+                    listener.onQuestionDetailsFetched(getFirstQuestionSchema());
+                } else {
+                    listener.onQuestionDetailsFetched(getUpdatedQuestionSchema());
+                }
             }
         }
 
-        private QuestionSchema getQuestionSchema() {
+        private QuestionSchema getFirstQuestionSchema() {
             return new QuestionSchema(TITLE, ID, BODY);
+        }
+
+        private QuestionSchema getUpdatedQuestionSchema() {
+            return new QuestionSchema(UPDATED_TITLE, UPDATED_ID, UPDATED_BODY);
         }
     }
 
